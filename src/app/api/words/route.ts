@@ -93,9 +93,19 @@ async function saveWordlist(newContent: string, sha: string | null) {
   }
 
   // 降级本地写入
-  const localPath = path.join(process.cwd(), 'cspell-words.txt');
-  fs.writeFileSync(localPath, normalizedContent, 'utf8');
-  return { success: true };
+  try {
+    const localPath = path.join(process.cwd(), 'cspell-words.txt');
+    fs.writeFileSync(localPath, normalizedContent, 'utf8');
+    return { success: true };
+  } catch (err: any) {
+    console.error('本地写入失败:', err);
+    if (err.code === 'EROFS' || err.message?.includes('read-only')) {
+      throw new Error(
+        '检测到云端环境为只读文件系统，且 GITHUB_TOKEN 或 GITHUB_REPO 环境变量缺失。如果您刚刚在 Vercel 平台上配置了这些变量，请执行一次重新部署（Redeploy）以让变量生效。'
+      );
+    }
+    throw new Error(`本地写入降级失败: ${err.message}`);
+  }
 }
 
 // GET: 获取 JSON 格式的单词列表
