@@ -24,3 +24,5 @@ qrcode
 hztech
 pptxgenjs
 vuedraggable
+antigravitycli
+vercel
