@@ -25,3 +25,4 @@ hztech
 pptxgenjs
 vuedraggable
 antigravitycli
+vercel
