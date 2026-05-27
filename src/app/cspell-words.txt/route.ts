@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { Redis } from "@upstash/redis";
+
+const kv = Redis.fromEnv();
+const KV_CACHE_KEY = "cspell:cached_words";
 
 export const dynamic = "force-dynamic";
 
@@ -47,8 +51,26 @@ export async function GET() {
     content = readLocalFile();
   }
 
+  // 解析已有的单词
+  const existingWords = content
+    .split(/\r?\n/)
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0);
+
+  // 从 KV 获取暂存单词
+  let cachedWords: string[] = [];
+  try {
+    cachedWords = (await kv.smembers(KV_CACHE_KEY)) || [];
+  } catch (e) {
+    console.error("KV read error in txt route:", e);
+  }
+
+  // 合并并去重
+  const allWords = Array.from(new Set([...existingWords, ...cachedWords]));
+  const finalContent = allWords.join("\n") + (allWords.length > 0 ? "\n" : "");
+
   // 返回纯文本格式响应
-  return new NextResponse(content, {
+  return new NextResponse(finalContent, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
