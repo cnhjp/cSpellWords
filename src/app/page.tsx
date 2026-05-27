@@ -473,25 +473,43 @@ export default function Home() {
             {/* 配置参考说明 */}
             <div className="bg-slate-900/20 border border-slate-800/40 rounded-3xl p-6 backdrop-blur-xl space-y-4">
               <h3 className="text-xs font-bold text-slate-300 tracking-wider uppercase">CSpell 环境集成指南</h3>
-              <div className="text-xs text-slate-400 space-y-3 leading-relaxed">
+              <div className="text-xs text-slate-400 space-y-4 leading-relaxed">
                 <div>
-                  <span className="font-semibold text-slate-300 block mb-0.5">1. 本地 VS Code 配置</span>
-                  在项目根目录下的 <code className="text-indigo-400 font-mono">cspell.json</code> 中添加以下配置直接加载该在线词库：
-                  <pre className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-850 mt-1.5 overflow-x-auto text-[10px] text-slate-400 font-mono">
-{`{
-  "dictionaryDefinitions": [
-    {
-      "name": "custom-words",
-      "path": "https://<your-domain>/cspell-words.txt"
-    }
-  ],
-  "dictionaries": ["custom-words"]
+                  <span className="font-semibold text-slate-300 block mb-1">1. 在 .vscode/settings.json 中加入：</span>
+                  <pre className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-850 overflow-x-auto text-[10px] text-slate-400 font-mono">
+{`"cSpell.customDictionaries": {
+  "project-words": {
+    "name": "project-words",
+    "path": "./.vscode/cspell-words.txt"
+  }
 }`}
                   </pre>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-300 block">2. 免人工部署设计</span>
-                  本系统写操作通过 API 安全触达您的 GitHub，无须每次修改在本地手动推 Git。
+                  <span className="font-semibold text-slate-300 block mb-1">2. 创建 .vscode/tasks.json，内容为：</span>
+                  <pre className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-850 overflow-x-auto text-[10px] text-slate-400 font-mono">
+{`{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "更新 cSpell 远程词表",
+      "type": "shell",
+      "command": "Invoke-WebRequest -Uri 'https://cspell-words.vercel.app/cspell-words.txt' -OutFile '\${workspaceFolder}/.vscode/cspell-words.txt'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}`}
+                  </pre>
+                </div>
+                <div className="text-[10px] text-slate-500 leading-normal">
+                  提示：通过上述配置，每次使用 VS Code 打开该项目文件夹时，系统都会全自动静默下载云端最新词库，并在本地进行极速校对。
                 </div>
               </div>
             </div>
