@@ -1,34 +1,43 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  Search, 
-  Copy, 
-  ExternalLink, 
-  Lock, 
-  Unlock, 
-  RefreshCw, 
-  BookOpen, 
-  Check, 
-  Globe, 
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  Plus,
+  Trash2,
+  Search,
+  Copy,
+  ExternalLink,
+  Lock,
+  Unlock,
+  RefreshCw,
+  BookOpen,
+  Check,
+  Globe,
   Laptop,
   CheckCircle,
-  AlertTriangle
-} from 'lucide-react';
+  AlertTriangle,
+} from "lucide-react";
 
 export default function Home() {
   const [words, setWords] = useState<string[]>([]);
-  const [filteredWords, setFilteredWords] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [singleWord, setSingleWord] = useState('');
-  const [bulkWords, setBulkWords] = useState('');
-  const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
-  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [singleWord, setSingleWord] = useState("");
+  const [bulkWords, setBulkWords] = useState("");
+  const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
+
   // 密码与授权状态
-  const [password, setPassword] = useState('');
-  const [isAuthSaved, setIsAuthSaved] = useState(false);
+  const [password, setPassword] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("cspell_admin_password") || "";
+    }
+    return "";
+  });
+  const [isAuthSaved, setIsAuthSaved] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("cspell_admin_password");
+    }
+    return false;
+  });
 
   // 页面状态
   const [isLoading, setIsLoading] = useState(true);
@@ -44,61 +53,63 @@ export default function Home() {
   // 复制反馈状态
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // 初始化加载
-  useEffect(() => {
-    // 从 localStorage 中读取保存的密码
-    const savedPassword = localStorage.getItem('cspell_admin_password');
-    if (savedPassword) {
-      setPassword(savedPassword);
-      setIsAuthSaved(true);
-    }
-    loadWords();
-  }, []);
-
-  // 过滤单词
-  useEffect(() => {
-    const filtered = words.filter(word => 
-      word.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredWords(filtered);
-    setCurrentPage(1); // 搜索时重置回第一页
-  }, [searchQuery, words]);
-
   // 加载单词表列表
-  const loadWords = async () => {
+  const loadWords = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorMsg(null);
-      const response = await fetch('/api/words');
+      const response = await fetch("/api/words");
       const data = await response.json();
-      
+
       if (response.ok) {
         setWords(data.words || []);
         setIsGitHub(data.isGitHub || false);
       } else {
-        setErrorMsg(data.error || '获取单词表失败');
+        setErrorMsg(data.error || "获取单词表失败");
       }
-    } catch (err) {
-      setErrorMsg('网络异常，无法连接到 API 服务');
+    } catch (_err) {
+      setErrorMsg("网络异常，无法连接到 API 服务");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // 初始化加载
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadWords 是异步数据获取，setState 在 await 之后调用，不会产生级联渲染
+    loadWords();
+  }, [loadWords]);
+
+  // 过滤单词（使用 useMemo 代替 useEffect + setState）
+  const filteredWords = useMemo(() => {
+    return words.filter((word) =>
+      word.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [searchQuery, words]);
+
+  // 搜索变化时重置分页
+  const prevSearchRef = React.useRef(searchQuery);
+  useEffect(() => {
+    if (prevSearchRef.current !== searchQuery) {
+      prevSearchRef.current = searchQuery;
+      setCurrentPage(1);
+    }
+  }, [searchQuery]);
 
   // 保存密码到本地
   const handleSavePassword = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('cspell_admin_password', password);
+    localStorage.setItem("cspell_admin_password", password);
     setIsAuthSaved(true);
-    showSuccess('管理员密码已保存在本地浏览器中');
+    showSuccess("管理员密码已保存在本地浏览器中");
   };
 
   // 清除本地保存的密码
   const handleClearPassword = () => {
-    localStorage.removeItem('cspell_admin_password');
-    setPassword('');
+    localStorage.removeItem("cspell_admin_password");
+    setPassword("");
     setIsAuthSaved(false);
-    showSuccess('已清除本地保存的密码');
+    showSuccess("已清除本地保存的密码");
   };
 
   // 提示信息处理
@@ -120,25 +131,25 @@ export default function Home() {
     setIsSyncing(true);
     setErrorMsg(null);
     try {
-      const response = await fetch('/api/words', {
-        method: 'POST',
+      const response = await fetch("/api/words", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${password}`,
         },
-        body: JSON.stringify({ words: singleWord.trim() })
+        body: JSON.stringify({ words: singleWord.trim() }),
       });
 
       const data = await response.json();
       if (response.ok) {
-        setSingleWord('');
-        showSuccess(data.message || '添加成功');
+        setSingleWord("");
+        showSuccess(data.message || "添加成功");
         await loadWords();
       } else {
-        showError(data.error || '添加失败');
+        showError(data.error || "添加失败");
       }
-    } catch (err) {
-      showError('网络错误，请稍后再试');
+    } catch (_err) {
+      showError("网络错误，请稍后再试");
     } finally {
       setIsSyncing(false);
     }
@@ -152,25 +163,25 @@ export default function Home() {
     setIsSyncing(true);
     setErrorMsg(null);
     try {
-      const response = await fetch('/api/words', {
-        method: 'POST',
+      const response = await fetch("/api/words", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${password}`,
         },
-        body: JSON.stringify({ words: bulkWords })
+        body: JSON.stringify({ words: bulkWords }),
       });
 
       const data = await response.json();
       if (response.ok) {
-        setBulkWords('');
-        showSuccess(data.message || '批量导入成功');
+        setBulkWords("");
+        showSuccess(data.message || "批量导入成功");
         await loadWords();
       } else {
-        showError(data.error || '批量导入失败');
+        showError(data.error || "批量导入失败");
       }
-    } catch (err) {
-      showError('网络错误，请稍后再试');
+    } catch (_err) {
+      showError("网络错误，请稍后再试");
     } finally {
       setIsSyncing(false);
     }
@@ -178,29 +189,30 @@ export default function Home() {
 
   // 删除单词
   const handleDeleteWord = async (wordToDelete: string) => {
-    if (!window.confirm(`确定要从单词表中删除单词 "${wordToDelete}" 吗？`)) return;
+    if (!window.confirm(`确定要从单词表中删除单词 "${wordToDelete}" 吗？`))
+      return;
 
     setIsSyncing(true);
     setErrorMsg(null);
     try {
-      const response = await fetch('/api/words', {
-        method: 'DELETE',
+      const response = await fetch("/api/words", {
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${password}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${password}`,
         },
-        body: JSON.stringify({ word: wordToDelete })
+        body: JSON.stringify({ word: wordToDelete }),
       });
 
       const data = await response.json();
       if (response.ok) {
-        showSuccess(data.message || '单词已成功删除');
+        showSuccess(data.message || "单词已成功删除");
         await loadWords();
       } else {
-        showError(data.error || '删除失败');
+        showError(data.error || "删除失败");
       }
-    } catch (err) {
-      showError('网络错误，请稍后再试');
+    } catch (_err) {
+      showError("网络错误，请稍后再试");
     } finally {
       setIsSyncing(false);
     }
@@ -265,7 +277,9 @@ export default function Home() {
               className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent hover:border-slate-700/40 rounded-lg transition-all duration-200 disabled:opacity-50"
               title="刷新数据"
             >
-              <RefreshCw className={`h-4.5 w-4.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                className={`h-4.5 w-4.5 ${isLoading ? "animate-spin" : ""}`}
+              />
             </button>
           </div>
         </div>
@@ -273,7 +287,6 @@ export default function Home() {
 
       {/* 主体内容 */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
         {/* 全局通知 */}
         {errorMsg && (
           <div className="p-4 bg-red-950/40 border border-red-800/50 text-red-200 rounded-2xl flex items-start space-x-3 shadow-lg shadow-red-950/20 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -290,15 +303,22 @@ export default function Home() {
 
         {/* 顶部格栅板：安全配置与链接分发 */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
           {/* 安全口令校验卡片 */}
           <div className="lg:col-span-5 bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-xl shadow-xl flex flex-col justify-between">
             <div>
               <div className="flex items-center space-x-2.5 mb-3">
-                <div className={`p-2 rounded-lg ${isAuthSaved ? 'bg-indigo-500/10 text-indigo-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                  {isAuthSaved ? <Unlock className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+                <div
+                  className={`p-2 rounded-lg ${isAuthSaved ? "bg-indigo-500/10 text-indigo-400" : "bg-amber-500/10 text-amber-400"}`}
+                >
+                  {isAuthSaved ? (
+                    <Unlock className="h-5 w-5" />
+                  ) : (
+                    <Lock className="h-5 w-5" />
+                  )}
                 </div>
-                <h2 className="text-base font-bold text-slate-200">管理员安全授权</h2>
+                <h2 className="text-base font-bold text-slate-200">
+                  管理员安全授权
+                </h2>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
                 为防止未经授权的增删，更新单词表时需校验管理员口令。密码已保存在您的本地浏览器中，无需重复输入。
@@ -343,17 +363,22 @@ export default function Home() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
                 </span>
-                <h2 className="text-base font-bold text-slate-200">纯文本单词表直达链接</h2>
+                <h2 className="text-base font-bold text-slate-200">
+                  纯文本单词表直达链接
+                </h2>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                可以通过以下链接直接获取纯文本（一行一个单词）格式的单词表。支持 cspell 工具直接作为外部词库引用。
+                可以通过以下链接直接获取纯文本（一行一个单词）格式的单词表。支持
+                cspell 工具直接作为外部词库引用。
               </p>
             </div>
 
             <div className="space-y-3">
               <div className="flex items-center bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 justify-between group">
                 <code className="text-xs text-indigo-400 break-all select-all font-mono">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/cspell-words.txt` : '/cspell-words.txt'}
+                  {typeof window !== "undefined"
+                    ? `${window.location.origin}/cspell-words.txt`
+                    : "/cspell-words.txt"}
                 </code>
                 <div className="flex items-center space-x-1.5 ml-3 shrink-0">
                   <button
@@ -361,7 +386,11 @@ export default function Home() {
                     className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-transparent hover:border-slate-700/50 rounded-lg transition-all duration-150"
                     title="复制链接"
                   >
-                    {copiedLink ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                    {copiedLink ? (
+                      <Check className="h-4 w-4 text-emerald-400" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
                   </button>
                   <a
                     href="/cspell-words.txt"
@@ -383,32 +412,35 @@ export default function Home() {
 
         {/* 单词管理主板 */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
           {/* 左侧：输入/添加区域 */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-xl shadow-xl space-y-5">
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h2 className="text-base font-bold text-slate-200">单词录入维护</h2>
+                <h2 className="text-base font-bold text-slate-200">
+                  单词录入维护
+                </h2>
                 <div className="flex bg-slate-950/80 p-0.5 rounded-lg border border-slate-800">
                   <button
-                    onClick={() => setActiveTab('single')}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all duration-200 ${activeTab === 'single' ? 'bg-slate-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    onClick={() => setActiveTab("single")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all duration-200 ${activeTab === "single" ? "bg-slate-800 text-slate-100 shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
                   >
                     单个录入
                   </button>
                   <button
-                    onClick={() => setActiveTab('bulk')}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all duration-200 ${activeTab === 'bulk' ? 'bg-slate-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    onClick={() => setActiveTab("bulk")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all duration-200 ${activeTab === "bulk" ? "bg-slate-800 text-slate-100 shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
                   >
                     批量导入
                   </button>
                 </div>
               </div>
 
-              {activeTab === 'single' ? (
+              {activeTab === "single" ? (
                 <form onSubmit={handleAddSingle} className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-400">单个单词名称</label>
+                    <label className="text-xs font-semibold text-slate-400">
+                      单个单词名称
+                    </label>
                     <input
                       type="text"
                       value={singleWord}
@@ -439,7 +471,9 @@ export default function Home() {
               ) : (
                 <form onSubmit={handleAddBulk} className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-400">批量单词数据</label>
+                    <label className="text-xs font-semibold text-slate-400">
+                      批量单词数据
+                    </label>
                     <textarea
                       value={bulkWords}
                       onChange={(e) => setBulkWords(e.target.value)}
@@ -472,12 +506,16 @@ export default function Home() {
 
             {/* 配置参考说明 */}
             <div className="bg-slate-900/20 border border-slate-800/40 rounded-3xl p-6 backdrop-blur-xl space-y-4">
-              <h3 className="text-xs font-bold text-slate-300 tracking-wider uppercase">CSpell 环境集成指南</h3>
+              <h3 className="text-xs font-bold text-slate-300 tracking-wider uppercase">
+                CSpell 环境集成指南
+              </h3>
               <div className="text-xs text-slate-400 space-y-4 leading-relaxed">
                 <div>
-                  <span className="font-semibold text-slate-300 block mb-1">1. 在 .vscode/settings.json 中加入：</span>
+                  <span className="font-semibold text-slate-300 block mb-1">
+                    1. 在 .vscode/settings.json 中加入：
+                  </span>
                   <pre className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-850 overflow-x-auto text-[10px] text-slate-400 font-mono">
-{`"cSpell.customDictionaries": {
+                    {`"cSpell.customDictionaries": {
   "project-words": {
     "name": "project-words",
     "path": "./.vscode/cspell-words.txt"
@@ -486,9 +524,11 @@ export default function Home() {
                   </pre>
                 </div>
                 <div>
-                  <span className="font-semibold text-slate-300 block mb-1">2. 创建 .vscode/tasks.json，内容为：</span>
+                  <span className="font-semibold text-slate-300 block mb-1">
+                    2. 创建 .vscode/tasks.json，内容为：
+                  </span>
                   <pre className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-850 overflow-x-auto text-[10px] text-slate-400 font-mono">
-{`{
+                    {`{
   "version": "2.0.0",
   "tasks": [
     {
@@ -509,7 +549,8 @@ export default function Home() {
                   </pre>
                 </div>
                 <div className="text-[10px] text-slate-500 leading-normal">
-                  提示：通过上述配置，每次使用 VS Code 打开该项目文件夹时，系统都会全自动静默下载云端最新词库，并在本地进行极速校对。
+                  提示：通过上述配置，每次使用 VS Code
+                  打开该项目文件夹时，系统都会全自动静默下载云端最新词库，并在本地进行极速校对。
                 </div>
               </div>
             </div>
@@ -517,7 +558,6 @@ export default function Home() {
 
           {/* 右侧：列表检索与删除区域 */}
           <div className="lg:col-span-7 bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-xl shadow-xl flex flex-col min-h-[580px]">
-            
             {/* 顶栏：搜索过滤 */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-slate-850 gap-4 mb-5">
               <div>
@@ -527,7 +567,9 @@ export default function Home() {
                     {filteredWords.length} / {words.length}
                   </span>
                 </h2>
-                <p className="text-[10px] text-slate-500 mt-0.5">支持搜索查询和单个删除</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  支持搜索查询和单个删除
+                </p>
               </div>
 
               <div className="relative w-full sm:w-60">
@@ -547,13 +589,15 @@ export default function Home() {
               {isLoading ? (
                 <div className="h-64 flex flex-col items-center justify-center space-y-3">
                   <RefreshCw className="h-7 w-7 text-indigo-500 animate-spin" />
-                  <span className="text-xs text-slate-400">正在载入在线单词表数据...</span>
+                  <span className="text-xs text-slate-400">
+                    正在载入在线单词表数据...
+                  </span>
                 </div>
               ) : currentWords.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {currentWords.map((word, index) => (
-                    <div 
-                      key={index} 
+                    <div
+                      key={index}
                       className="group flex items-center justify-between px-3 py-2 bg-slate-950/40 hover:bg-slate-900/80 border border-slate-800/50 hover:border-indigo-500/30 rounded-xl transition-all duration-200 select-all"
                     >
                       <span className="text-xs font-mono text-slate-300 group-hover:text-slate-100 truncate pr-2">
@@ -573,7 +617,9 @@ export default function Home() {
               ) : (
                 <div className="h-64 flex flex-col items-center justify-center space-y-2 border border-dashed border-slate-800/80 rounded-2xl">
                   <Search className="h-8 w-8 text-slate-600" />
-                  <span className="text-xs text-slate-400">未检索到任何符合条件的单词</span>
+                  <span className="text-xs text-slate-400">
+                    未检索到任何符合条件的单词
+                  </span>
                 </div>
               )}
             </div>
@@ -587,14 +633,18 @@ export default function Home() {
                 <div className="flex items-center space-x-2">
                   <button
                     disabled={currentPage === 1 || isLoading}
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
                     className="px-3 py-1.5 bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 text-[10px] font-bold rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all duration-150"
                   >
                     上一页
                   </button>
                   <button
                     disabled={currentPage === totalPages || isLoading}
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
                     className="px-3 py-1.5 bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 text-[10px] font-bold rounded-lg disabled:opacity-30 disabled:pointer-events-none transition-all duration-150"
                   >
                     下一页
@@ -610,7 +660,8 @@ export default function Home() {
       <footer className="border-t border-slate-900 bg-slate-950 py-6 mt-16">
         <div className="max-w-7xl mx-auto px-4 text-center text-[10px] text-slate-600 tracking-wide font-medium flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
-            © {new Date().getFullYear()} cSpellWords. Crafted for elite developer tooling workflow.
+            © {new Date().getFullYear()} cSpellWords. Crafted for elite
+            developer tooling workflow.
           </div>
           <div className="flex items-center space-x-4">
             <span>Power of Gemini 3.5 & Next.js App Router</span>
