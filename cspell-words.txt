@@ -24,4 +24,3 @@ qrcode
 hztech
 pptxgenjs
 vuedraggable
-hi
