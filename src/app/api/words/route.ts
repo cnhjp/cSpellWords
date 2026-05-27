@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { Redis } from "@upstash/redis";
+
+const kv = Redis.fromEnv();
+
+const KV_CACHE_KEY = "cspell:cached_words";
+const COMMIT_THRESHOLD = 100;
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +139,19 @@ export async function GET() {
     .map((w) => w.trim())
     .filter((w) => w.length > 0);
 
-  return NextResponse.json({ words, isGitHub: !!process.env.GITHUB_TOKEN });
+  let cachedWords: string[] = [];
+  try {
+    cachedWords = (await kv.smembers(KV_CACHE_KEY)) || [];
+  } catch (e) {
+    console.error("KV read error:", e);
+  }
+
+  const allWords = Array.from(new Set([...words, ...cachedWords]));
+
+  return NextResponse.json({
+    words: allWords,
+    isGitHub: !!process.env.GITHUB_TOKEN,
+  });
 }
 
 // POST: 添加单个或批量单词
@@ -182,8 +200,15 @@ export async function POST(request: NextRequest) {
       .map((w) => w.trim())
       .filter((w) => w.length > 0);
 
+    let cachedWords: string[] = [];
+    try {
+      cachedWords = (await kv.smembers(KV_CACHE_KEY)) || [];
+    } catch (e) {
+      console.error("KV read error:", e);
+    }
+
     // 过滤重复词并合并
-    const existingSet = new Set(existingWords);
+    const existingSet = new Set([...existingWords, ...cachedWords]);
     const addedWords: string[] = [];
     newWords.forEach((word) => {
       if (!existingSet.has(word)) {
@@ -200,12 +225,31 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const updatedWords = [...existingWords, ...addedWords];
-    await saveWordlist(updatedWords.join("\n"), sha);
+    try {
+      if (addedWords.length > 0) {
+        await kv.sadd(KV_CACHE_KEY, addedWords[0], ...addedWords.slice(1));
+        cachedWords.push(...addedWords);
+      }
+    } catch (e) {
+      console.error("KV write error:", e);
+    }
+
+    if (cachedWords.length >= COMMIT_THRESHOLD) {
+      // 达到阈值，合并提交并清空缓存
+      const updatedWords = Array.from(
+        new Set([...existingWords, ...cachedWords]),
+      );
+      await saveWordlist(updatedWords.join("\n"), sha);
+      try {
+        await kv.del(KV_CACHE_KEY);
+      } catch (e) {
+        console.error("KV delete error:", e);
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      message: `成功添加 ${addedWords.length} 个单词`,
+      message: `成功暂存 ${addedWords.length} 个单词 (当前缓存: ${cachedWords.length}/${COMMIT_THRESHOLD})`,
       addedWords,
       addedCount: addedWords.length,
     });
@@ -248,15 +292,44 @@ export async function DELETE(request: NextRequest) {
       .map((w) => w.trim())
       .filter((w) => w.length > 0);
 
-    if (!existingWords.includes(targetWord)) {
+    let cachedWords: string[] = [];
+    try {
+      cachedWords = (await kv.smembers(KV_CACHE_KEY)) || [];
+    } catch (e) {
+      console.error("KV read error:", e);
+    }
+
+    const inGithub = existingWords.includes(targetWord);
+    const inCache = cachedWords.includes(targetWord);
+
+    if (!inGithub && !inCache) {
       return NextResponse.json(
         { error: "该单词不存在于单词表中" },
         { status: 404 },
       );
     }
 
-    const updatedWords = existingWords.filter((w) => w !== targetWord);
-    await saveWordlist(updatedWords.join("\n"), sha);
+    if (inGithub) {
+      // 如果在 GitHub 中，执行一次完整提交
+      const updatedWords = existingWords.filter((w) => w !== targetWord);
+      const finalWords = Array.from(
+        new Set([...updatedWords, ...cachedWords]),
+      ).filter((w) => w !== targetWord);
+
+      await saveWordlist(finalWords.join("\n"), sha);
+      try {
+        await kv.del(KV_CACHE_KEY);
+      } catch (e) {
+        console.error("KV delete error:", e);
+      }
+    } else if (inCache) {
+      // 只在缓存中，直接从缓存删除
+      try {
+        await kv.srem(KV_CACHE_KEY, targetWord);
+      } catch (e) {
+        console.error("KV remove error:", e);
+      }
+    }
 
     return NextResponse.json({
       success: true,
