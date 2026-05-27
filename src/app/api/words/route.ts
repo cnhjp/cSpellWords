@@ -17,7 +17,7 @@ async function getRawWordlist() {
         `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`,
         {
           headers: {
-            Authorization: `token ${token}`,
+            Authorization: `Bearer ${token}`,
             Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'Nextjs-Cspell-Words-Manager',
           },
@@ -71,7 +71,7 @@ async function saveWordlist(newContent: string, sha: string | null) {
       {
         method: 'PUT',
         headers: {
-          Authorization: `token ${token}`,
+          Authorization: `Bearer ${token}`,
           Accept: 'application/vnd.github.v3+json',
           'Content-Type': 'application/json',
           'User-Agent': 'Nextjs-Cspell-Words-Manager',

@@ -19,7 +19,7 @@ export async function GET() {
         `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`,
         {
           headers: {
-            Authorization: `token ${token}`,
+            Authorization: `Bearer ${token}`,
             Accept: 'application/vnd.github.v3+json',
             'User-Agent': 'Nextjs-Cspell-Words-Manager',
           },
