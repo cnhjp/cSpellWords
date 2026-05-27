@@ -16,6 +16,8 @@ import {
   Laptop,
   CheckCircle,
   AlertTriangle,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 export default function Home() {
@@ -24,6 +26,31 @@ export default function Home() {
   const [singleWord, setSingleWord] = useState("");
   const [bulkWords, setBulkWords] = useState("");
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
+
+  // 主题状态
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  // 初始化主题（从 localStorage 获取）
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("cspell_theme") as "dark" | "light";
+      if (savedTheme) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- 初始化客户端主题，无性能影响
+        setTheme(savedTheme);
+        document.documentElement.setAttribute("data-theme", savedTheme);
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    }
+  }, []);
+
+  // 切换主题方法
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    localStorage.setItem("cspell_theme", nextTheme);
+    document.documentElement.setAttribute("data-theme", nextTheme);
+  };
 
   // 密码与授权状态
   const [password, setPassword] = useState(() => {
@@ -270,6 +297,19 @@ export default function Home() {
                 </>
               )}
             </div>
+
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent hover:border-slate-700/40 rounded-lg transition-all duration-200"
+              title={theme === "dark" ? "切换为亮色模式" : "切换为暗色模式"}
+              aria-label="Toggle Theme"
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4.5 w-4.5 text-amber-400" />
+              ) : (
+                <Moon className="h-4.5 w-4.5 text-indigo-500" />
+              )}
+            </button>
 
             <button
               onClick={loadWords}
